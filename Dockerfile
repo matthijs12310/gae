@@ -1,16 +1,45 @@
 FROM ubuntu:18.04
 
-RUN apt-get update
-RUN apt-get install \
-    apt-transport-https \
-    ca-certificates \
-    curl \
-    gnupg \
-    lsb-release -y
-RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-RUN echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-RUN apt-get update
-RUN apt-get install docker-ce docker-ce-cli containerd.io
-RUN docker run -it --init -p 8080:8080 -v "$(pwd):/home/workspace:cached" gitpod/openvscode-server
+ARG RELEASE_TAG
+
+ARG USERNAME=openvscode-server
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
+RUN apt update && \
+    apt install -y git wget sudo && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /home/
+
+# Downloading the latest VSC Server release and extracting the release archive
+RUN wget https://github.com/gitpod-io/openvscode-server/releases/download/${RELEASE_TAG}/${RELEASE_TAG}-linux-x64.tar.gz && \
+    tar -xzf ${RELEASE_TAG}-linux-x64.tar.gz && \
+    rm -f ${RELEASE_TAG}-linux-x64.tar.gz
+
+# Creating the user and usergroup
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USERNAME -m $USERNAME \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME
+
+RUN chmod g+rw /home && \
+    mkdir -p /home/workspace && \
+    chown -R $USERNAME:$USERNAME /home/workspace && \
+    chown -R $USERNAME:$USERNAME /home/${RELEASE_TAG}-linux-x64;
+
+USER $USERNAME
+
+WORKDIR /home/workspace/
+
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
+ENV HOME=/home/workspace
+ENV EDITOR=code
+ENV VISUAL=code
+ENV GIT_EDITOR="code --wait"
+ENV OPENVSCODE_SERVER_ROOT=/home/${RELEASE_TAG}-linux-x64
+
+EXPOSE 8080
+
+ENTRYPOINT ${OPENVSCODE_SERVER_ROOT}/server.sh
