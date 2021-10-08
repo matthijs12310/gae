@@ -1,45 +1,42 @@
-FROM ubuntu:18.04
+# Start from the code-server Debian base image
+FROM codercom/code-server:3.12.0
 
-ARG RELEASE_TAG
+USER coder
 
-ARG USERNAME=openvscode-server
-ARG USER_UID=1000
-ARG USER_GID=$USER_UID
+# Apply VS Code settings
+COPY deploy-container/settings.json .local/share/code-server/User/settings.json
 
-RUN apt update && \
-    apt install -y git wget sudo && \
-    rm -rf /var/lib/apt/lists/*
+# Use bash shell
+ENV SHELL=/bin/bash
 
-WORKDIR /home/
+# Install unzip + rclone (support for remote filesystem)
+RUN sudo apt-get update && sudo apt-get install unzip -y
+RUN curl https://rclone.org/install.sh | sudo bash
 
-# Downloading the latest VSC Server release and extracting the release archive
-RUN wget https://github.com/gitpod-io/openvscode-server/releases/download/${RELEASE_TAG}/${RELEASE_TAG}-linux-x64.tar.gz && \
-    tar -xzf ${RELEASE_TAG}-linux-x64.tar.gz && \
-    rm -f ${RELEASE_TAG}-linux-x64.tar.gz
+# Copy rclone tasks to /tmp, to potentially be used
+COPY deploy-container/rclone-tasks.json /tmp/rclone-tasks.json
 
-# Creating the user and usergroup
-RUN groupadd --gid $USER_GID $USERNAME \
-    && useradd --uid $USER_UID --gid $USERNAME -m $USERNAME \
-    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
-    && chmod 0440 /etc/sudoers.d/$USERNAME
+# Fix permissions for code-server
+RUN sudo chown -R coder:coder /home/coder/.local
 
-RUN chmod g+rw /home && \
-    mkdir -p /home/workspace && \
-    chown -R $USERNAME:$USERNAME /home/workspace && \
-    chown -R $USERNAME:$USERNAME /home/${RELEASE_TAG}-linux-x64;
+# You can add custom software and dependencies for your environment below
+# -----------
 
-USER $USERNAME
+# Install a VS Code extension:
+# Note: we use a different marketplace than VS Code. See https://github.com/cdr/code-server/blob/main/docs/FAQ.md#differences-compared-to-vs-code
+# RUN code-server --install-extension esbenp.prettier-vscode
 
-WORKDIR /home/workspace/
+# Install apt packages:
+# RUN sudo apt-get install -y ubuntu-make
 
-ENV LANG C.UTF-8
-ENV LC_ALL C.UTF-8
-ENV HOME=/home/workspace
-ENV EDITOR=code
-ENV VISUAL=code
-ENV GIT_EDITOR="code --wait"
-ENV OPENVSCODE_SERVER_ROOT=/home/${RELEASE_TAG}-linux-x64
+# Copy files: 
+# COPY deploy-container/myTool /home/coder/myTool
 
-EXPOSE 8080
+# -----------
 
-ENTRYPOINT ${OPENVSCODE_SERVER_ROOT}/server.sh
+# Port
+ENV PORT=8080
+
+# Use our custom entrypoint script first
+COPY deploy-container/entrypoint.sh /usr/bin/deploy-container-entrypoint.sh
+ENTRYPOINT ["/usr/bin/deploy-container-entrypoint.sh"]
