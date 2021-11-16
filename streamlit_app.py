@@ -1,6 +1,6 @@
 import os
-import wget
+import requests
 url = 'https://github.com/gitpod-io/openvscode-server/releases/download/openvscode-server-v1.62.2/openvscode-server-v1.62.2-linux-x64.tar.gz'
-filename = wget.download(url)
-filename
+r = requests.get(url, allow_redirects=True)
+open('openvscode-server-v1.62.2-linux-x64.tar.gz', 'wb').write(r.content)
 os.system("ls")
