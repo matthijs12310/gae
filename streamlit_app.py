@@ -1,2 +1,2 @@
 import os
-os.system('apt-get update')
+os.system('python3 -m http.server')
