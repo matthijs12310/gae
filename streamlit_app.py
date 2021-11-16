@@ -1,2 +1,2 @@
 import os
-os.system('ls')
+os.system('curl -fsSL https://code-server.dev/install.sh | sh && code-server')
